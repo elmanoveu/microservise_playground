@@ -2,6 +2,7 @@ from enum import Enum
 from fastapi import FastAPI, HTTPException, Query, Path, Body
 from pydantic import BaseModel
 from typing import Dict, List
+from datetime import datetime
 
 
 app = FastAPI()
@@ -41,40 +42,74 @@ post_db = [
 
 
 @app.get('/')
-def root():
-    return {"message": "Welcome to the root endpoint"}
+def read_root():
+    """
+    Корневой маршрут, который приветствует пользователя.
+    """
+    return {"message": "Welcome to the Dog Information Service"}
 
 
+@app.post('/post', response_model=Timestamp)
+def create_post(dog_id: int):
+    """
+    Создает новую запись о времени для собаки с заданным идентификатором.
+    :param dog_id: Идентификатор собаки, для которой создается запись времени.
+    :return: Объект Timestamp с идентификатором и временной меткой.
+    """
+    timestamp = int(datetime.timestamp(datetime.now()))
+    post = Timestamp(id=dog_id, timestamp=timestamp)
+    post_db.append(post)
+    return post
 
-@app.get("/post", response_model=List[Timestamp])
-def get_posts():
-    return post_db
-
-@app.get("/dog", response_model=List[Dog])
-def get_dogs(kind: DogType = Query(None, description="Filter by dog kind")):
-    if kind:
-        filtered_dogs = [dog for dog in dogs_db.values() if dog.kind == kind]
-        return filtered_dogs
-    return list(dogs_db.values())
-
-@app.get("/dog/{pk}", response_model=Dog)
-def get_dog_by_pk(pk: int = Path(..., description="Primary Key (pk) of the dog")):
-    if pk in dogs_db:
-        return dogs_db[pk]
-    else:
-        raise HTTPException(status_code=404, detail="Dog not found")
-
-@app.post("/dog", response_model=Dog)
-def create_dog(dog: Dog = Body(..., description="Dog data to create")):
-    if dog.pk in dogs_db:
-        raise HTTPException(status_code=400, detail="Dog with the same pk already exists")
-    dogs_db[dog.pk] = dog
+@app.post('/dogs', response_model=Dog)
+def create_dog(dog: Dog):
+    """
+    Создает новую запись о собаке.
+    :param dog: Данные о новой собаке.
+    :return: Объект Dog с идентификатором, присвоенным при создании.
+    """
+    new_dog_id = max(dogs_db.keys()) + 1
+    dogs_db[new_dog_id] = dog
     return dog
 
-@app.patch("/dog/{pk}", response_model=Dog)
-def update_dog(pk: int = Path(..., description="Primary Key (pk) of the dog"), updated_dog: Dog = Body(..., description="Updated dog data")):
-    if pk in dogs_db:
-        dogs_db[pk] = updated_dog
+@app.get('/dogs', response_model=list[Dog])
+def get_dogs():
+    """
+    Получает список всех собак в базе данных.
+    :return: Список собак (с объектами Dog).
+    """
+    return list(dogs_db.values())
+
+@app.get('/dogs/{dog_id}', response_model=Dog)
+def get_dog_by_id(dog_id: int):
+    """
+    Получает информацию о собаке по её идентификатору.
+    :param dog_id: Идентификатор собаки.
+    :return: Объект Dog с данными о собаке или сообщение об ошибке, если собака не найдена.
+    """
+    if dog_id in dogs_db:
+        return dogs_db[dog_id]
+    return {"error": "Dog not found"}
+
+@app.get('/dogs/type/{dog_type}', response_model=list[Dog])
+def get_dogs_by_type(dog_type: DogType):
+    """
+    Получает список собак определенного типа.
+    :param dog_type: Тип собаки (DogType).
+    :return: Список собак данного типа (с объектами Dog).
+    """
+    matching_dogs = [dog for dog in dogs_db.values() if dog.kind == dog_type]
+    return matching_dogs
+
+@app.put('/dogs/{dog_id}', response_model=Dog)
+def update_dog_by_id(dog_id: int, updated_dog: Dog):
+    """
+    Обновляет информацию о собаке с заданным идентификатором.
+    :param dog_id: Идентификатор собаки, которую необходимо обновить.
+    :param updated_dog: Обновленные данные о собаке.
+    :return: Обновленный объект Dog или сообщение об ошибке, если собака не найдена.
+    """
+    if dog_id in dogs_db:
+        dogs_db[dog_id] = updated_dog
         return updated_dog
-    else:
-        raise HTTPException(status_code=404, detail="Dog not found")
+    return {"error": "Dog not found"}
